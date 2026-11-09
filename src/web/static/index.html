@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="E5Pulse">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <title>E5Pulse Console</title>
+  <link rel="stylesheet" href="styles.css?v=4">
+</head>
+<body>
+
+<!-- Login -->
+<div id="login-view" class="hidden">
+  <form class="login-card" id="login-form">
+    <img src="icon.svg" alt="logo">
+    <h1>E5Pulse Console</h1>
+    <input type="password" id="password" placeholder="Access password"
+           autocomplete="current-password" required>
+    <button class="btn primary" style="width:100%" type="submit">Sign in</button>
+    <p class="muted" id="login-err" style="color:#fca5a5;margin-top:12px"></p>
+  </form>
+</div>
+
+<!-- Main -->
+<div id="app-view" class="hidden">
+  <header class="topbar">
+    <div class="title"><img src="icon.svg" alt=""> E5Pulse</div>
+    <div class="actions">
+      <span class="pulse-dot" id="health-dot" title="Service status"></span>
+      <button class="btn ghost sm" id="btn-logout">Sign out</button>
+    </div>
+  </header>
+
+  <main>
+    <nav class="tabs">
+      <button data-tab="status" class="active">Status</button>
+      <button data-tab="config">Config</button>
+      <button data-tab="logs">Logs</button>
+    </nav>
+
+    <!-- Status tab -->
+    <section id="tab-status">
+      <div class="refresh-bar">
+        <span class="pulse-dot"></span>
+        <span>Auto-refresh every 15s · last <span id="last-refresh">—</span></span>
+      </div>
+      <div id="account-cards"></div>
+    </section>
+
+    <!-- Config tab -->
+    <section id="tab-config" class="hidden">
+      <div class="card">
+        <h3>&#9201; Working Hours</h3>
+        <div class="row-between">
+          <span class="k">Enable time window</span>
+          <label class="switch">
+            <input type="checkbox" id="sched-enabled"><span class="slider"></span>
+          </label>
+        </div>
+        <div style="margin:10px 0">
+          <div class="k muted" style="margin-bottom:8px">Working days</div>
+          <div class="workdays" id="workdays"></div>
+        </div>
+        <div id="time-windows"></div>
+        <button class="btn ghost sm" id="btn-add-window" style="margin-top:8px">+ Add window</button>
+        <div class="btn-row">
+          <button class="btn primary sm" id="btn-save-schedule">Save schedule</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>&#128100; Accounts</h3>
+        <p class="section-tip">Disable an account or override its interval per account (leave blank to inherit the global default)</p>
+        <div id="account-settings"></div>
+      </div>
+
+      <div class="card">
+        <h3>&#9881;&#65039; Global Scheduling</h3>
+        <p class="section-tip">Applies to every account without a custom interval; takes effect on the next round</p>
+        <div class="form-grid">
+          <label>Default min interval (s)
+            <input type="number" id="g-min-interval" min="30">
+          </label>
+          <label>Default max interval (s)
+            <input type="number" id="g-max-interval" min="30">
+          </label>
+          <label>Max concurrent accounts (1–20)
+            <input type="number" id="g-concurrency" min="1" max="20">
+          </label>
+          <label>Request timeout (5–120 s)
+            <input type="number" id="g-timeout" min="5" max="120">
+          </label>
+        </div>
+        <div class="btn-row">
+          <button class="btn primary sm" id="btn-save-global">Save global settings</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>&#128737; Error Handling &amp; Smart Pause</h3>
+        <div class="form-grid">
+          <label>Failures before pause
+            <input type="number" id="eh-max-fail" min="1">
+          </label>
+          <label>Pause duration (min)
+            <input type="number" id="eh-pause-min" min="1">
+          </label>
+          <label>Error rate threshold (0–1)
+            <input type="number" id="eh-rate" min="0.01" max="1" step="0.05">
+          </label>
+          <label>Sliding window size
+            <input type="number" id="eh-window" min="2">
+          </label>
+          <label>Retry count (0–6)
+            <input type="number" id="eh-retry" min="0" max="6">
+          </label>
+          <label>Backoff seconds (comma-separated)
+            <input type="text" id="eh-backoff" inputmode="numeric">
+          </label>
+        </div>
+        <div class="btn-row">
+          <button class="btn primary sm" id="btn-save-eh">Save error handling</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>&#127922; Call Policy</h3>
+        <div class="form-grid">
+          <label>Min APIs per round
+            <input type="number" id="cp-min" min="1">
+          </label>
+          <label>Max APIs per round
+            <input type="number" id="cp-max" min="1">
+          </label>
+          <label>Min inter-call delay (s)
+            <input type="number" id="cp-delay-min" min="0">
+          </label>
+          <label>Max inter-call delay (s)
+            <input type="number" id="cp-delay-max" min="0">
+          </label>
+        </div>
+        <div class="row-between">
+          <span class="k">Shuffle call order</span>
+          <label class="switch">
+            <input type="checkbox" id="cp-shuffle"><span class="slider"></span>
+          </label>
+        </div>
+        <div class="btn-row">
+          <button class="btn primary sm" id="btn-save-cp">Save call policy</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>&#128268; Graph API Toggles</h3>
+        <p class="section-tip">Disabled APIs are never called; /me endpoints are auto-filtered in client-credentials mode</p>
+        <div id="api-list"></div>
+      </div>
+    </section>
+
+    <!-- Logs tab -->
+    <section id="tab-logs" class="hidden">
+      <div class="card">
+        <h3>&#128203; Runtime Logs (last 200 lines)</h3>
+        <div class="btn-row" style="margin-top:0;margin-bottom:10px">
+          <button class="btn ghost sm" id="btn-refresh-logs">Refresh</button>
+          <label class="muted" style="display:flex;align-items:center;gap:6px">
+            <input type="checkbox" id="auto-logs"> Auto-scroll
+          </label>
+        </div>
+        <pre class="logs" id="log-box">Loading…</pre>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="app.js?v=4"></script>
+</body>
+</html>

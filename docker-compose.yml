@@ -1,0 +1,26 @@
+services:
+  e5pulse:
+    build: .
+    image: e5pulse:latest
+    container_name: e5pulse
+    restart: unless-stopped
+    volumes:
+      # config.yaml must be writable so the web panel's hot-reload can save
+      # changes; a timestamped backup is written to ./data/backups before each write.
+      - ./config.yaml:/app/config.yaml
+      - ./data:/data
+    environment:
+      - TZ=UTC
+    ports:
+      # Single inbound port for the web panel; all Graph calls are outbound.
+      # Change the host-side port here if 8090 is already in use.
+      - "8090:8090"
+    deploy:
+      resources:
+        limits:
+          memory: 150M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

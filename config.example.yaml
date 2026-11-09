@@ -1,0 +1,169 @@
+# ==========================================================================
+# E5Pulse example configuration
+# Copy this file to config.yaml and fill in your real values.
+# Recommended permissions: chmod 600 config.yaml (it holds your client secret).
+# Pydantic validates everything on startup and exits on any invalid value.
+# ==========================================================================
+
+global:
+  log_level: INFO                    # DEBUG / INFO / WARNING / ERROR
+  log_file: /data/logs/e5pulse.log   # Container path; use ./data/logs/ for local runs
+  max_concurrent_accounts: 3         # Accounts called concurrently
+  default_min_interval: 1200         # Lower bound of the random interval (seconds)
+  default_max_interval: 2400         # Upper bound of the random interval (seconds)
+  timezone: UTC
+  request_timeout: 30                # Per-request Graph timeout (seconds, 5-120)
+  state_file: /data/status.json      # Account state snapshot output
+
+# Working-hours window (global default; an account can override it)
+schedule:
+  enabled: true
+  workdays: [1, 2, 3, 4, 5]          # 1 = Monday ... 7 = Sunday
+  time_windows:
+    - start: "09:00"
+      end: "12:00"
+    - start: "14:00"
+      end: "22:00"
+
+# Error handling and smart pause
+error_handling:
+  max_consecutive_failures: 8        # Pause after N consecutive failures
+  pause_minutes: 180                 # How long to pause (minutes)
+  max_error_rate: 0.6                # Pause if the sliding-window error rate exceeds this
+  sliding_window_size: 20            # Size of the sliding window (recent calls)
+  retry_times: 3                     # Max retries for retryable errors
+  retry_backoff: [2, 5, 10]          # Exponential backoff (seconds); 429 honors Retry-After first
+
+# Per-round call behavior
+call_policy:
+  apis_per_round_min: 1              # Min number of APIs picked per round
+  apis_per_round_max: 3              # Max number of APIs picked per round
+  shuffle_order: true                # Execute them in random order
+  inter_call_delay_min: 1            # Short random delay between calls in a round (seconds)
+  inter_call_delay_max: 5
+
+# APIs enabled by default (an account's `apis` field replaces this whole list).
+# All entries are read-only. Write operations are riskier and stay disabled.
+#
+# Recommended client-credentials (CC) endpoints, verified working with the
+# corresponding Application permissions (Read.All):
+#   /users                         <- User.Read.All
+#   /organization, /directoryRoles,
+#   /subscribedSkus, /domains      <- Directory.Read.All
+#   /groups                         <- Group.Read.All
+#   /sites?search=*                 <- Sites.Read.All
+#   /devices                        <- Device.Read.All
+#   /applications, /servicePrincipals <- Application.Read.All
+#   /auditLogs/signIns              <- AuditLog.Read.All
+#
+# NOTE: /me/* endpoints require a user context. They are auto-filtered in CC mode
+# (a WARNING is logged) and only work in ROPC mode.
+default_apis:
+  - name: get_users
+    method: GET
+    url: https://graph.microsoft.com/v1.0/users?$top=5&$select=displayName,userPrincipalName
+    enabled: true
+  - name: get_organization
+    method: GET
+    url: https://graph.microsoft.com/v1.0/organization
+    enabled: true
+  - name: get_directory_roles
+    method: GET
+    url: https://graph.microsoft.com/v1.0/directoryRoles
+    enabled: true
+  - name: get_subscribed_skus
+    method: GET
+    url: https://graph.microsoft.com/v1.0/subscribedSkus
+    enabled: true
+  - name: get_groups
+    method: GET
+    url: https://graph.microsoft.com/v1.0/groups?$top=5
+    enabled: true
+  - name: get_sites
+    method: GET
+    url: https://graph.microsoft.com/v1.0/sites?search=*
+    enabled: true
+  - name: get_devices
+    method: GET
+    url: https://graph.microsoft.com/v1.0/devices?$top=5
+    enabled: true
+  - name: get_applications
+    method: GET
+    url: https://graph.microsoft.com/v1.0/applications?$top=5
+    enabled: true
+  - name: get_service_principals
+    method: GET
+    url: https://graph.microsoft.com/v1.0/servicePrincipals?$top=5
+    enabled: true
+  - name: get_audit_signins
+    method: GET
+    url: https://graph.microsoft.com/v1.0/auditLogs/signIns?$top=3
+    enabled: true
+  - name: get_domains
+    method: GET
+    url: https://graph.microsoft.com/v1.0/domains
+    enabled: true
+
+  # ---- ROPC-only /me examples (ignored in CC mode) ----
+  # - name: get_me
+  #   method: GET
+  #   url: https://graph.microsoft.com/v1.0/me
+  #   enabled: true
+  # - name: get_messages
+  #   method: GET
+  #   url: https://graph.microsoft.com/v1.0/me/messages?$top=5
+  #   enabled: true
+
+  # ---- Write operation example (disabled by default) ----
+  # - name: send_self_mail
+  #   method: POST
+  #   url: https://graph.microsoft.com/v1.0/me/sendMail
+  #   enabled: false
+  #   body: {}
+
+# Web panel. When enabled=false the HTTP server is not started.
+panel:
+  enabled: false                    # Set to true to enable the panel
+  host: "0.0.0.0"
+  port: 8090
+  password: "change-me-strong-password"   # Panel login password; change it and chmod 600
+  # session_secret: "a-long-random-string"  # Random per startup if omitted (re-login after restart)
+  login_fail_limit: 5               # Lock the IP after N failed attempts
+
+accounts:
+  - name: "primary-admin"
+    enabled: true
+    auth_type: client_credentials     # client_credentials | ropc
+    tenant_id: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+    client_id: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+    client_secret: "your-secret-here"
+    # The two fields below are only for ROPC (poor compatibility, often disabled,
+    # breaks under MFA/conditional access):
+    # username: "user@tenant.onmicrosoft.com"
+    # password: "password"
+
+    # Account-level overrides (omit to inherit global / schedule / default_apis)
+    # min_interval: 1500
+    # max_interval: 2800
+    # schedule: { ... }              # Override the working-hours window
+    # apis: []                        # Providing this replaces default_apis entirely
+
+  - name: "secondary-1"
+    enabled: true
+    auth_type: client_credentials
+    tenant_id: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+    client_id: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+    client_secret: "your-secret-here"
+
+  # ---- Full ROPC example (public-client flow; client_secret is a required placeholder) ----
+  # Prerequisites: enable "public client flow" in Azure, ROPC allowed on the tenant,
+  # no MFA / conditional access for the account.
+  # - name: "ropc-account"
+  #   enabled: false
+  #   auth_type: ropc
+  #   tenant_id: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+  #   client_id: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+  #   client_secret: "unused-but-required"
+  #   username: "user@tenant.onmicrosoft.com"
+  #   password: "your-password"
+  # ROPC has a user context, so /me/* endpoints are available (unlike CC mode).

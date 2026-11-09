@@ -1,0 +1,10 @@
+# E5Pulse runtime dependencies (Python 3.12)
+msal>=1.31,<2.0
+httpx>=0.27,<1.0
+pydantic>=2.7,<3.0
+pydantic-settings>=2.3,<3.0
+PyYAML>=6.0,<7.0
+# Phase 4 panel
+fastapi>=0.115
+uvicorn[standard]>=0.30
+itsdangerous>=2.1
