@@ -21,9 +21,7 @@ const api = {
         if (typeof data.detail === "string") msg = data.detail;
         else if (Array.isArray(data.detail) && data.detail.length) {
           // FastAPI 422 validation error: detail is [{loc, msg, type}, ...]
-          msg = data.detail
-            .map((d) => d.msg || JSON.stringify(d))
-            .join("；");
+          msg = data.detail.map((d) => d.msg || JSON.stringify(d)).join("; ");
         } else if (data.reason) msg = data.reason;
       }
       throw new Error(msg);
@@ -244,7 +242,7 @@ async function loadConfig() {
   $("#cp-delay-max").value = cp.inter_call_delay_max;
   $("#cp-shuffle").checked = cp.shuffle_order;
 
-  // account settings (enable/disable + custom interval)
+  // account settings (enable/disable + custom interval + delete)
   $("#account-settings").innerHTML = configCache.accounts.map((a) => `
     <div class="acct-block" data-name="${escapeHtml(a.name)}">
       <div class="acct-head">
@@ -264,6 +262,7 @@ async function loadConfig() {
       </div>
       <div class="btn-row">
         <button class="btn primary sm acct-save">Save account</button>
+        <button class="btn btn-danger sm acct-delete" type="button">Delete</button>
       </div>
     </div>`).join("");
   $$(".acct-block").forEach((block) => {
@@ -276,6 +275,8 @@ async function loadConfig() {
         block.querySelector(".acct-min").value,
         block.querySelector(".acct-max").value,
       ));
+    block.querySelector(".acct-delete").addEventListener("click",
+      () => deleteAccount(name));
   });
 }
 
@@ -299,6 +300,57 @@ async function saveAccountInterval(name, minRaw, maxRaw) {
     toast(`${name} interval saved (${min}–${max} s)`, "ok");
   } catch (e) { toast(e.message, "err"); }
 }
+
+async function deleteAccount(name) {
+  // Confirm twice to prevent mistakes; the backend also refuses to remove the last account
+  if (!confirm(`Delete account "${name}"?\nA config backup is saved first and can be restored from data/backups.`)) return;
+  try {
+    const r = await api.post("/api/accounts/delete", { name });
+    toast(`Deleted ${name}, ${r.account_count} account(s) remain`, "ok");
+    loadConfig();
+    loadStatus();
+  } catch (e) { toast(e.message, "err"); }
+}
+
+// Add-account form: expand / collapse
+$("#btn-toggle-add").addEventListener("click", () => {
+  $("#add-account-form").classList.toggle("hidden");
+});
+$("#btn-add-cancel").addEventListener("click", () => {
+  $("#add-account-form").classList.add("hidden");
+  $("#add-account-form").reset();
+});
+
+$("#add-account-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const name = $("#na-name").value.trim();
+  const tenant_id = $("#na-tenant").value.trim();
+  const client_id = $("#na-client").value.trim();
+  const client_secret = $("#na-secret").value.trim();
+  if (!name || !tenant_id || !client_id || !client_secret)
+    return toast("Name, tenant ID, client ID and secret are all required", "err");
+  const body = { name, tenant_id, client_id, client_secret };
+  const minRaw = $("#na-min").value, maxRaw = $("#na-max").value;
+  if (minRaw !== "") body.min_interval = Number(minRaw);
+  if (maxRaw !== "") body.max_interval = Number(maxRaw);
+  if (body.min_interval && body.max_interval && body.min_interval > body.max_interval)
+    return toast("Custom min interval cannot exceed max", "err");
+
+  const btn = $("#btn-add-submit");
+  btn.disabled = true; btn.textContent = "Validating…";
+  try {
+    const r = await api.post("/api/accounts", body);
+    toast(`Account "${r.name}" credentials validated and saved`, "ok");
+    $("#add-account-form").reset();
+    $("#add-account-form").classList.add("hidden");
+    loadConfig();
+    loadStatus();
+  } catch (err) {
+    toast(err.message, "err");
+  } finally {
+    btn.disabled = false; btn.textContent = "Validate & save";
+  }
+});
 
 $("#btn-save-global").addEventListener("click", async () => {
   const minInterval = Number($("#g-min-interval").value);

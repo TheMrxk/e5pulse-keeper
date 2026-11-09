@@ -41,7 +41,9 @@ secrets never leave your own infrastructure.
 
 ## Features
 
-- **Multi-account** — keep any number of E5 tenants alive from one instance.
+- **Multi-account** — keep any number of E5 tenants alive from one instance, and
+  add/remove accounts directly from the panel (credentials are validated with a
+  real token exchange before anything is written).
 - **Two authentication flows** — Client Credentials (recommended) and ROPC (legacy).
 - **Randomized calling** — picks random APIs in random order, with randomized
   intervals and inter-call delays to avoid a detectable fixed pattern.
@@ -155,14 +157,16 @@ use it as a full-screen, installable PWA.
 
 - **Status** — per-account success/failure counts, pause state, last/next run,
   with Run now / Pause / Resume actions and 15-second auto-refresh.
-- **Config** — hot-edit working hours, per-account and global intervals,
-  concurrency, timeout, error handling, call policy, and individual Graph API toggles.
+- **Config** — add/remove accounts (client-credentials mode, validated live),
+  hot-edit working hours, per-account and global intervals, concurrency, timeout,
+  error handling, call policy, and individual Graph API toggles.
 - **Logs** — tail the runtime log.
 
-Hot-editable settings are written back to `config.yaml` only after passing
-validation, and a timestamped backup is saved to `data/backups/` first.
-Credentials, adding/removing accounts, and the panel password require a restart
-by design, to prevent dangerous online changes.
+Changes are written back to `config.yaml` only after passing validation, and a
+timestamped backup is saved to `data/backups/` first. New accounts are validated
+with a real token exchange before they are stored, and apply without a restart.
+The panel password and ROPC-account creation stay file-only by design, to limit
+the blast radius of a compromised panel session.
 
 ## Running without Docker
 

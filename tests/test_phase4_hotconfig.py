@@ -106,7 +106,7 @@ def test_update_api_toggle(tmp_path: Path) -> None:
 
 def test_unknown_account_raises(tmp_path: Path) -> None:
     _, path = write_config(tmp_path)
-    with pytest.raises(HotConfigError, match="Account not found"):
+    with pytest.raises(HotConfigError, match="account not found"):
         ConfigStore(path).update_account_enabled("ghost", True)
 
 

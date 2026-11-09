@@ -17,12 +17,9 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-面板热改配置（开发文档 §12.1 热改边界铁律）。
-
-可热改（内存即时生效 + 写回 config.yaml，写前自动备份）：
-- 账号 enabled 启停、间隔上下限、API 启用开关、工作时间窗口
-必须重启（面板拒绝在线修改）：
-- 账号增删、client_secret/认证类型/凭证、max_concurrent、日志路径等
+Hot-reloadable configuration (in-memory apply + write back to config.yaml with
+a pre-write backup): account enabled flag, interval bounds, API toggles, schedule,
+global settings, error handling, call policy, and account add/delete.
 """
 
 import logging
@@ -40,7 +37,7 @@ logger = logging.getLogger("e5pulse")
 
 
 class HotConfigError(Exception):
-    """热改非法（越界/需重启/校验失败）。"""
+    """Raised when a hot-config change is invalid (out of range / restart-only / validation)."""
 
 
 def dump_config_with_secrets(cfg: AppConfig) -> dict:
@@ -126,7 +123,7 @@ class ConfigStore:
         if account.enabled == enabled:
             return cfg  # 无变化，不写盘
         account.enabled = enabled
-        self._persist(cfg, f"账号[{account_name}] enabled={enabled}")
+        self._persist(cfg, f"account[{account_name}] enabled={enabled}")
         return cfg
 
     def update_account_interval(
@@ -140,7 +137,7 @@ class ConfigStore:
             )
         account.min_interval = min_interval
         account.max_interval = max_interval
-        self._persist(cfg, f"账号[{account_name}] 间隔={min_interval}~{max_interval}")
+        self._persist(cfg, f"account[{account_name}] interval={min_interval}~{max_interval}")
         return cfg
 
     def update_api_enabled(
@@ -153,7 +150,7 @@ class ConfigStore:
             account = self._find_account(cfg, account_name)
             if not account.apis:
                 raise HotConfigError(
-                    f"账号[{account_name}] 没有私有 apis（当前继承 default_apis）"
+                    f"account[{account_name}] has no private apis (currently inherits default_apis)"
                 )
             for api in account.apis:
                 if api.name == api_name:
@@ -174,7 +171,7 @@ class ConfigStore:
         # 借用 Pydantic 校验新 schedule，非法直接抛 ValidationError
         from .models import ScheduleConfig
         cfg.schedule = ScheduleConfig.model_validate(schedule_dict)
-        self._persist(cfg, "全局工作时间窗口更新")
+        self._persist(cfg, "global schedule updated")
         return cfg
 
     # ---------- 全局默认 / 弹性 / 调用策略（Phase 4-⑤ 新增） ----------
@@ -189,21 +186,21 @@ class ConfigStore:
             )
         cfg.global_.default_min_interval = min_interval
         cfg.global_.default_max_interval = max_interval
-        self._persist(cfg, f"全局默认间隔={min_interval}~{max_interval}秒")
+        self._persist(cfg, f"global default interval={min_interval}~{max_interval}s")
         return cfg
 
     def update_concurrency(self, max_concurrent: int) -> AppConfig:
         """最大并发账号数（1~20，apply_config 会据此重建信号量）。"""
         cfg = self._reload_lenient()
         cfg.global_.max_concurrent_accounts = max_concurrent  # Pydantic 边界在 _persist 兜底
-        self._persist(cfg, f"最大并发={max_concurrent}")
+        self._persist(cfg, f"max concurrency={max_concurrent}")
         return cfg
 
     def update_request_timeout(self, timeout: int) -> AppConfig:
         """单次 Graph 请求超时（5~120 秒）。"""
         cfg = self._reload_lenient()
         cfg.global_.request_timeout = timeout
-        self._persist(cfg, f"请求超时={timeout}秒")
+        self._persist(cfg, f"request timeout={timeout}s")
         return cfg
 
     def update_error_handling(self, eh_dict: dict) -> AppConfig:
@@ -211,7 +208,7 @@ class ConfigStore:
         from .models import ErrorHandlingConfig
         cfg = self._reload_lenient()
         cfg.error_handling = ErrorHandlingConfig.model_validate(eh_dict)
-        self._persist(cfg, "错误处理策略更新")
+        self._persist(cfg, "error handling updated")
         return cfg
 
     def update_call_policy(self, policy_dict: dict) -> AppConfig:
@@ -219,7 +216,51 @@ class ConfigStore:
         from .models import CallPolicy
         cfg = self._reload_lenient()
         cfg.call_policy = CallPolicy.model_validate(policy_dict)
-        self._persist(cfg, "调用策略更新")
+        self._persist(cfg, "call policy updated")
+        return cfg
+
+    # ---------- 账号增删（Phase 4-⑥，热生效） ----------
+
+    def add_account(self, account_dict: dict) -> AppConfig:
+        """新增一个 CC 模式账号并写盘。
+
+        凭证由调用方先做真实 token 验证；这里负责重名/重复检测与 Pydantic 校验。
+        """
+        from .models import AccountConfig
+        cfg = self._reload_lenient()
+        name = (account_dict.get("name") or "").strip()
+        if not name:
+            raise HotConfigError("account name must not be empty")
+        # 重名检测
+        if any(a.name == name for a in cfg.accounts):
+            raise HotConfigError(f"account name already exists: {name}")
+        # 同 tenant+client 重复检测（避免重复应用注册）
+        for a in cfg.accounts:
+            if (a.tenant_id == account_dict.get("tenant_id")
+                    and a.client_id == account_dict.get("client_id")):
+                raise HotConfigError(
+                    f"an account with the same tenant_id+client_id already exists: {a.name}")
+        # 强制 CC 模式，在线入口不接受 ROPC（兼容性差，仍需走文件配置）
+        payload = dict(account_dict)
+        payload["auth_type"] = "client_credentials"
+        try:
+            new_account = AccountConfig.model_validate(payload)
+        except Exception as exc:
+            raise HotConfigError(f"account validation failed, write rejected: {exc}") from exc
+        cfg.accounts.append(new_account)
+        self._persist(cfg, f"add account[{name}]")
+        return cfg
+
+    def delete_account(self, name: str) -> AppConfig:
+        """按 name 删除账号；至少保留一个，防止配置变空导致无法启动。"""
+        cfg = self._reload_lenient()
+        before = len(cfg.accounts)
+        cfg.accounts = [a for a in cfg.accounts if a.name != name]
+        if len(cfg.accounts) == before:
+            raise HotConfigError(f"account not found: {name}")
+        if not cfg.accounts:
+            raise HotConfigError("at least one account must remain; refusing to delete the last one")
+        self._persist(cfg, f"delete account[{name}]")
         return cfg
 
     # ---------- 内部工具 ----------
@@ -229,7 +270,7 @@ class ConfigStore:
         for account in cfg.accounts:
             if account.name == name:
                 return account
-        raise HotConfigError(f"Account not found: {name}")
+        raise HotConfigError(f"account not found: {name}")
 
     def _persist(self, cfg: AppConfig, action: str) -> None:
         # 热改放宽"至少一个启用账号"的启动硬校验：用户可能主动停用全部账号，
@@ -239,8 +280,8 @@ class ConfigStore:
             AppConfig.model_validate(dumped)
         except Exception as exc:
             if "no account has enabled=true" not in str(exc):
-                raise HotConfigError(f"Post-change config validation failed, write rejected: {exc}") from exc
-            logger.warning("热改后无启用账号，服务将空转等待重新启用: %s", action)
+                raise HotConfigError(f"post-change config validation failed, write rejected: {exc}") from exc
+            logger.warning("no enabled account after hot change, service will idle until re-enabled: %s", action)
         self._backup()
         self._write(cfg)
-        logger.info("热改成功: %s", action)
+        logger.info("hot config applied: %s", action)

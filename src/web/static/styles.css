@@ -16,7 +16,7 @@
 * { box-sizing: border-box; }
 
 html, body {
-  /* Lock horizontal scrolling: nothing should break out of the viewport */
+  /* 锁定横向滚动：任何元素都不应撑破视口产生左右滑动 */
   overflow-x: hidden;
   max-width: 100%;
 }
@@ -30,17 +30,17 @@ body {
   font-size: 15px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
-  /* Prevent iOS text auto-adjust; pairs with the 16px inputs below */
+  /* iOS：聚焦输入框时禁止页面整体缩放（配合下方 16px 输入字号双保险） */
   -webkit-text-size-adjust: 100%;
 }
 
-/* All inputs at 16px: iOS Safari auto-zooms on focus only for inputs smaller than
-   16px. Standardizing on 16px removes the focus zoom without disabling manual pinch-zoom. */
+/* 所有输入控件统一 16px：iOS Safari 对 font-size < 16px 的输入框聚焦会自动放大，
+   统一到 16px 后聚焦不再缩放；用 !important 覆盖各组件里的 14/15px */
 input, select, textarea {
   font-size: 16px !important;
 }
 
-/* Keep media and preformatted blocks inside the viewport to avoid horizontal overflow */
+/* 媒体元素和盒模型不超出视口，杜绝横向溢出 */
 img, svg, video, canvas, pre {
   max-width: 100%;
 }
@@ -301,3 +301,26 @@ pre.logs {
   background: var(--bg); color: var(--text); font-size: 15px;
 }
 .acct-block .btn-row { margin-bottom: 0; }
+.acct-block .btn-danger {
+  background: transparent; color: #f87171; border: 1px solid rgba(248,113,113,.4);
+}
+.acct-block .btn-danger:hover { background: rgba(248,113,113,.12); }
+
+/* 添加账号表单 */
+.add-account { margin-top: 12px; }
+.add-form {
+  margin-top: 12px; padding: 14px;
+  border: 1px dashed var(--border); border-radius: 10px;
+  display: flex; flex-direction: column; gap: 10px;
+  background: var(--card-2);
+}
+.add-form label {
+  display: flex; flex-direction: column; gap: 6px;
+  font-size: 13px; color: var(--muted);
+}
+.add-form input {
+  width: 100%; padding: 10px 11px; border-radius: 9px;
+  border: 1px solid var(--border); background: var(--bg);
+  color: var(--text);
+}
+.add-form input:focus { outline: none; border-color: var(--blue); }

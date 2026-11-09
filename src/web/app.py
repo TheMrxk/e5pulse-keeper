@@ -17,12 +17,9 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-FastAPI 面板应用（开发文档 §12.1）。
-
-同进程内嵌：直接持有 Scheduler 引用读内存状态，无跨进程通信。
-路由分两类：
-- /api/auth/login、/health、静态资源：无需登录
-- 其余 /api/*：必须带有效签名 cookie
+Embedded FastAPI panel: holds the Scheduler reference in-process and reads
+in-memory state without IPC. /api/auth/login, /health and static assets are
+public; every other /api/* route requires a valid signed cookie.
 """
 
 import logging
@@ -35,7 +32,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from ..config_store import ConfigStore, HotConfigError
-from ..models import AppConfig
+from ..auth import AuthError, AuthProvider
+from ..models import AppConfig, AccountConfig, AuthType
 from ..scheduler import Scheduler
 from .auth_session import COOKIE_NAME, SessionAuth
 
@@ -90,6 +88,19 @@ class CallPolicyBody(BaseModel):
     shuffle_order: bool = True
     inter_call_delay_min: int = Field(ge=0)
     inter_call_delay_max: int = Field(ge=0)
+
+
+class NewAccountBody(BaseModel):
+    name: str = Field(min_length=1, max_length=64)
+    tenant_id: str = Field(min_length=1)
+    client_id: str = Field(min_length=1)
+    client_secret: str = Field(min_length=1)
+    min_interval: int | None = Field(default=None, ge=30)
+    max_interval: int | None = Field(default=None, ge=30)
+
+
+class DeleteAccountBody(BaseModel):
+    name: str = Field(min_length=1, max_length=64)
 
 
 def create_app(
@@ -250,6 +261,55 @@ def create_app(
             raise HTTPException(404, f"Account not found: {name}")
         logger.info("面板操作 resume account=%s ip=%s", name, client_ip(request))
         return result
+
+    # ---------------- 账号增删（Phase 4-⑥，保存前真实校验凭证） ----------------
+
+    @app.post("/api/accounts", dependencies=[Depends(require_login)])
+    async def add_account(body: NewAccountBody, request: Request):
+        # 1) 先用凭证真实换一次 token，凭证错误直接拒绝、绝不写盘
+        probe = AccountConfig.model_validate({
+            "name": body.name,
+            "enabled": True,
+            "auth_type": AuthType.CLIENT_CREDENTIALS,
+            "tenant_id": body.tenant_id,
+            "client_id": body.client_id,
+            "client_secret": body.client_secret,
+            "min_interval": body.min_interval,
+            "max_interval": body.max_interval,
+        })
+        provider = AuthProvider(probe)
+        try:
+            await provider.get_token()
+        except AuthError as exc:
+            logger.warning("新增账号凭证验证失败 name=%s ip=%s err=%s",
+                           body.name, client_ip(request), exc)
+            raise HTTPException(400, f"Credential validation failed, nothing saved: {exc}")
+        except Exception as exc:
+            # MSAL 构造期权威发现失败（假 tenant GUID/网络问题）也在此拦截，
+            # 统一转 400，避免 500 且绝不写盘
+            logger.warning("新增账号验证异常 name=%s ip=%s err=%s",
+                           body.name, client_ip(request), exc)
+            raise HTTPException(400, f"Credential validation failed, nothing saved: {exc}")
+        # 2) 凭证有效，再落盘（重名/重复/Pydantic 校验在 store 内拦截）
+        try:
+            new_cfg = store.add_account(body.model_dump())
+        except HotConfigError as exc:
+            raise HTTPException(400, str(exc))
+        scheduler.apply_config(new_cfg)
+        logger.info("面板新增账号 account=%s ip=%s", body.name, client_ip(request))
+        return {"ok": True, "action": "add_account", "name": body.name,
+                "account_count": len(new_cfg.accounts)}
+
+    @app.post("/api/accounts/delete", dependencies=[Depends(require_login)])
+    def delete_account(body: DeleteAccountBody, request: Request):
+        try:
+            new_cfg = store.delete_account(body.name)
+        except HotConfigError as exc:
+            raise HTTPException(400, str(exc))
+        scheduler.apply_config(new_cfg)
+        logger.info("面板删除账号 account=%s ip=%s", body.name, client_ip(request))
+        return {"ok": True, "action": "delete_account", "name": body.name,
+                "account_count": len(new_cfg.accounts)}
 
     # ---------------- 热改配置（Phase 4-③，写前自动备份） ----------------
 

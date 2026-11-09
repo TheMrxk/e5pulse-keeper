@@ -12,7 +12,7 @@
   <link rel="icon" href="icon.svg">
   <link rel="apple-touch-icon" href="icon.svg">
   <title>E5Pulse Console</title>
-  <link rel="stylesheet" href="styles.css?v=5">
+  <link rel="stylesheet" href="styles.css?v=6">
 </head>
 <body>
 
@@ -77,8 +77,39 @@
 
       <div class="card">
         <h3>&#128100; Accounts</h3>
-        <p class="section-tip">Disable an account or override its interval per account (leave blank to inherit the global default)</p>
+        <p class="section-tip">Disable an account or override its interval per account (blank inherits the global default)</p>
         <div id="account-settings"></div>
+
+        <div class="add-account">
+          <button class="btn ghost sm" id="btn-toggle-add" type="button">+ Add account (app / tenant)</button>
+          <form id="add-account-form" class="add-form hidden">
+            <p class="section-tip">Enter the Azure app-registration credentials. They are validated for real on save; nothing is written on failure.</p>
+            <label>Display name
+              <input type="text" id="na-name" autocomplete="off" placeholder="e.g. second E5 subscription">
+            </label>
+            <label>Directory (tenant) ID
+              <input type="text" id="na-tenant" autocomplete="off" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+            </label>
+            <label>Application (client) ID
+              <input type="text" id="na-client" autocomplete="off" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+            </label>
+            <label>Client secret value
+              <input type="password" id="na-secret" autocomplete="new-password" placeholder="Value shown once when you create the secret">
+            </label>
+            <div class="form-grid">
+              <label>Custom min interval (s, optional)
+                <input type="number" id="na-min" min="30" placeholder="blank=global">
+              </label>
+              <label>Custom max interval (s, optional)
+                <input type="number" id="na-max" min="30" placeholder="blank=global">
+              </label>
+            </div>
+            <div class="btn-row">
+              <button class="btn primary sm" type="submit" id="btn-add-submit">Validate &amp; save</button>
+              <button class="btn ghost sm" type="button" id="btn-add-cancel">Cancel</button>
+            </div>
+          </form>
+        </div>
       </div>
 
       <div class="card">
@@ -181,6 +212,6 @@
 </div>
 
 <div class="toast" id="toast"></div>
-<script src="app.js?v=5"></script>
+<script src="app.js?v=6"></script>
 </body>
 </html>
