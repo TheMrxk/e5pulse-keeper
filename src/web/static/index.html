@@ -12,7 +12,7 @@
   <link rel="icon" href="icon.svg">
   <link rel="apple-touch-icon" href="icon.svg">
   <title>E5Pulse Console</title>
-  <link rel="stylesheet" href="styles.css?v=6">
+  <link rel="stylesheet" href="styles.css?v=7">
 </head>
 <body>
 
@@ -109,6 +109,28 @@
               <button class="btn ghost sm" type="button" id="btn-add-cancel">Cancel</button>
             </div>
           </form>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>&#128100; Admin Consent Wizard</h3>
+        <p class="section-tip">Sign in once as an admin to automatically grant read-only Graph permissions (device-code flow; your password is never seen, the token is discarded after use)</p>
+        <button class="btn ghost sm" id="btn-consent" type="button">Start consent (device code)</button>
+
+        <div id="consent-panel" class="consent-panel hidden">
+          <div id="consent-steps" class="consent-steps">
+            <ol>
+              <li>Open <strong id="consent-uri">microsoft.com/devicelogin</strong> (phone or PC)</li>
+              <li>Enter the code below and submit</li>
+              <li>Sign in with this tenant's <strong>Global Administrator</strong> and accept</li>
+              <li>Return here; the grant finishes automatically, no Azure clicking needed</li>
+            </ol>
+            <div class="device-code" id="consent-code">--------</div>
+            <p class="muted" id="consent-status">Waiting for sign-in…</p>
+          </div>
+          <div class="btn-row">
+            <button class="btn ghost sm" id="btn-consent-cancel" type="button">Close</button>
+          </div>
         </div>
       </div>
 
@@ -212,6 +234,6 @@
 </div>
 
 <div class="toast" id="toast"></div>
-<script src="app.js?v=6"></script>
+<script src="app.js?v=7"></script>
 </body>
 </html>

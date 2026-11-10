@@ -1,8 +1,8 @@
 // E5Pulse Service Worker
 // Strategy: API requests always go to the network (data must stay live); the static
 // shell uses network-first with a cache fallback so the last UI still renders offline.
-const CACHE = "e5pulse-shell-v7";
-const SHELL = ["/", "/index.html", "/app.js?v=6", "/styles.css?v=6",
+const CACHE = "e5pulse-shell-v8";
+const SHELL = ["/", "/index.html", "/app.js?v=7", "/styles.css?v=7",
                "/manifest.webmanifest", "/icon.svg"];
 
 self.addEventListener("install", (event) => {

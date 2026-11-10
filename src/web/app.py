@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 E5Pulse - self-hosted Microsoft 365 E5 keep-alive service.
 Copyright (C) 2026 TheMrxk
@@ -16,13 +14,13 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>.
-
-Embedded FastAPI panel: holds the Scheduler reference in-process and reads
-in-memory state without IPC. /api/auth/login, /health and static assets are
-public; every other /api/* route requires a valid signed cookie.
 """
 
+from __future__ import annotations
+
+import asyncio
 import logging
+import time
 from collections import deque
 from pathlib import Path
 
@@ -33,6 +31,7 @@ from pydantic import BaseModel, Field
 
 from ..config_store import ConfigStore, HotConfigError
 from ..auth import AuthError, AuthProvider
+from ..consent import ConsentManager, GRANTABLE_READONLY_ROLES
 from ..models import AppConfig, AccountConfig, AuthType
 from ..scheduler import Scheduler
 from .auth_session import COOKIE_NAME, SessionAuth
@@ -103,14 +102,22 @@ class DeleteAccountBody(BaseModel):
     name: str = Field(min_length=1, max_length=64)
 
 
+class ConsentStartBody(BaseModel):
+    # 要授权的目标应用；默认即当前保活应用，也可对同租户其他应用发起
+    tenant_id: str = Field(min_length=1)
+    client_id: str = Field(min_length=1)
+    roles: list[str] | None = None
+
+
 def create_app(
     config: AppConfig,
     scheduler: Scheduler,
     config_path: str,
 ) -> FastAPI:
     panel = config.panel
-    app = FastAPI(title="E5Pulse 面板", docs_url=None, redoc_url=None, openapi_url=None)
+    app = FastAPI(title="E5Pulse Console", docs_url=None, redoc_url=None, openapi_url=None)
     store = ConfigStore(config_path)
+    consent_manager = ConsentManager()
 
     if not panel.password:
         raise ValueError("panel.password is required when panel.enabled=true")
@@ -207,6 +214,7 @@ def create_app(
                     "enabled": a.enabled,
                     "auth_type": a.auth_type.value,
                     "tenant_id": a.tenant_id,
+                    "client_id": a.client_id,
                     "interval": list(a.effective_interval(g)),
                     "effective_apis": [
                         api.name for api in scheduler.effective_apis(a.name)
@@ -310,6 +318,52 @@ def create_app(
         logger.info("面板删除账号 account=%s ip=%s", body.name, client_ip(request))
         return {"ok": True, "action": "delete_account", "name": body.name,
                 "account_count": len(new_cfg.accounts)}
+
+    # ---------------- 管理员授权向导（Phase 4-⑦，设备码流程） ----------------
+
+    @app.get("/api/consent/roles", dependencies=[Depends(require_login)])
+    def consent_roles():
+        """Return the grantable read-only role allowlist for the UI."""
+        return {"roles": GRANTABLE_READONLY_ROLES}
+
+    @app.post("/api/consent/start", dependencies=[Depends(require_login)])
+    async def consent_start(body: ConsentStartBody, request: Request):
+        # Intersect with the allowlist; no write permission is ever accepted
+        wanted = body.roles or list(GRANTABLE_READONLY_ROLES)
+        safe_roles = [r for r in wanted if r in GRANTABLE_READONLY_ROLES]
+        if not safe_roles:
+            raise HTTPException(400, "No grantable read-only permission")
+        try:
+            session = await asyncio.to_thread(
+                consent_manager.start_session, body.tenant_id, body.client_id
+            )
+        except Exception as exc:
+            logger.warning("consent start failed ip=%s err=%s", client_ip(request), exc)
+            raise HTTPException(400, f"Failed to start device flow: {exc}")
+        # Poll and grant in the background; session state is read via /poll
+        asyncio.create_task(
+            consent_manager.poll_and_grant(session.session_id, body.client_id, safe_roles)
+        )
+        logger.info("面板授权向导发起 ip=%s tenant=%s", client_ip(request), body.tenant_id)
+        return {
+            "session_id": session.session_id,
+            "user_code": session.user_code,
+            "verification_uri": session.verification_uri,
+            "expires_in": int(session.expires_at - time.time()),
+            "roles": safe_roles,
+        }
+
+    @app.get("/api/consent/poll/{session_id}", dependencies=[Depends(require_login)])
+    def consent_poll(session_id: str):
+        session = consent_manager.get_session(session_id)
+        if session is None:
+            raise HTTPException(404, "Consent session not found or expired")
+        return {
+            "status": session.status,
+            "message": session.message,
+            "granted_roles": session.granted_roles,
+            "admin_upn": session.admin_upn,
+        }
 
     # ---------------- 热改配置（Phase 4-③，写前自动备份） ----------------
 

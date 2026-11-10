@@ -56,6 +56,10 @@ secrets never leave your own infrastructure.
   accounts, and hot-edit most configuration from a mobile-friendly dashboard.
 - **Hot config reload** — changes apply without a restart; every write is backed
   up automatically before it touches `config.yaml`.
+- **Admin consent wizard** — grant the read-only Graph permissions from the
+  panel via a device-code flow: an admin signs in once on Microsoft's official
+  page, and E5Pulse assigns the roles automatically. The admin token is held
+  only in memory and discarded; no password is ever entered into E5Pulse.
 - **Resilient HTTP** — exponential backoff for retryable errors, honors `Retry-After` on 429.
 - **Observability** — rotating file + console logs, a `status.json` snapshot,
   and a `/health` endpoint.

@@ -21,7 +21,9 @@ const api = {
         if (typeof data.detail === "string") msg = data.detail;
         else if (Array.isArray(data.detail) && data.detail.length) {
           // FastAPI 422 validation error: detail is [{loc, msg, type}, ...]
-          msg = data.detail.map((d) => d.msg || JSON.stringify(d)).join("; ");
+          msg = data.detail
+            .map((d) => d.msg || JSON.stringify(d))
+            .join("；");
         } else if (data.reason) msg = data.reason;
       }
       throw new Error(msg);
@@ -302,7 +304,7 @@ async function saveAccountInterval(name, minRaw, maxRaw) {
 }
 
 async function deleteAccount(name) {
-  // Confirm twice to prevent mistakes; the backend also refuses to remove the last account
+  // Confirm to prevent mistakes; backend also refuses to remove the last account
   if (!confirm(`Delete account "${name}"?\nA config backup is saved first and can be restored from data/backups.`)) return;
   try {
     const r = await api.post("/api/accounts/delete", { name });
@@ -350,6 +352,58 @@ $("#add-account-form").addEventListener("submit", async (e) => {
   } finally {
     btn.disabled = false; btn.textContent = "Validate & save";
   }
+});
+
+/* ---------------- admin consent wizard (device code) ---------------- */
+let consentPollTimer = null;
+
+function stopConsentPolling() {
+  if (consentPollTimer) { clearInterval(consentPollTimer); consentPollTimer = null; }
+}
+function setConsentStatus(text, kind) {
+  const el = $("#consent-status");
+  el.textContent = text;
+  el.className = kind || "";
+}
+
+$("#btn-consent").addEventListener("click", async () => {
+  if (!configCache || !configCache.accounts.length)
+    return toast("No account available; add an app first", "err");
+  // Grant to the first account's app by default (apps in the same tenant share it)
+  const target = configCache.accounts[0];
+  $("#consent-panel").classList.remove("hidden");
+  setConsentStatus("Generating device code…");
+  $("#consent-code").textContent = "--------";
+  try {
+    const r = await api.post("/api/consent/start", {
+      tenant_id: target.tenant_id,
+      client_id: target.client_id,
+    });
+    $("#consent-code").textContent = r.user_code;
+    $("#consent-uri").textContent = r.verification_uri;
+    setConsentStatus(`Waiting for sign-in… (valid for ${Math.round(r.expires_in / 60)} min)`);
+    stopConsentPolling();
+    consentPollTimer = setInterval(async () => {
+      try {
+        const p = await api.get(`/api/consent/poll/${r.session_id}`);
+        if (p.status === "done") {
+          stopConsentPolling();
+          setConsentStatus(`Granted ${p.granted_roles.length} read-only role(s) (${p.admin_upn || "admin"})`, "done");
+          toast("Consent completed", "ok");
+        } else if (p.status === "error") {
+          stopConsentPolling();
+          setConsentStatus("✖ " + (p.message || "consent failed"), "error");
+        }
+      } catch (e) { stopConsentPolling(); setConsentStatus("✖ " + e.message, "error"); }
+    }, 3000);
+  } catch (e) {
+    setConsentStatus("✖ " + e.message, "error");
+  }
+});
+
+$("#btn-consent-cancel").addEventListener("click", () => {
+  stopConsentPolling();
+  $("#consent-panel").classList.add("hidden");
 });
 
 $("#btn-save-global").addEventListener("click", async () => {

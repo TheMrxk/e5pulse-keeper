@@ -16,7 +16,7 @@
 * { box-sizing: border-box; }
 
 html, body {
-  /* 锁定横向滚动：任何元素都不应撑破视口产生左右滑动 */
+  /* Lock horizontal scrolling: nothing should break out of the viewport */
   overflow-x: hidden;
   max-width: 100%;
 }
@@ -30,30 +30,29 @@ body {
   font-size: 15px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
-  /* iOS：聚焦输入框时禁止页面整体缩放（配合下方 16px 输入字号双保险） */
+  /* Prevent iOS page zoom on input focus (pairs with the 16px input font-size) */
   -webkit-text-size-adjust: 100%;
 }
 
-/* 所有输入控件统一 16px：iOS Safari 对 font-size < 16px 的输入框聚焦会自动放大，
-   统一到 16px 后聚焦不再缩放；用 !important 覆盖各组件里的 14/15px */
+/* All inputs at 16px: iOS Safari auto-zooms on focus for smaller fonts; !important overrides component sizes */
 input, select, textarea {
   font-size: 16px !important;
 }
 
-/* 媒体元素和盒模型不超出视口，杜绝横向溢出 */
+/* Keep media inside the viewport to avoid horizontal overflow */
 img, svg, video, canvas, pre {
   max-width: 100%;
 }
 
 .hidden { display: none !important; }
 
-/* ---------- 登录页 ---------- */
+/* ---------- Login view ---------- */
 #login-view {
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  /* 避开刘海/灵动岛与底部 Home 指示条，standalone 下不贴边 */
+  /* Avoid the notch/Dynamic Island and Home indicator in standalone mode */
   padding: 24px;
   padding-top: calc(24px + env(safe-area-inset-top, 0px));
   padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
@@ -78,12 +77,12 @@ img, svg, video, canvas, pre {
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--text);
-  font-size: 16px; /* >=16 防 iOS 聚焦缩放 */
+  font-size: 16px; /* >=16 prevents iOS focus zoom */
   margin-bottom: 14px;
 }
 .login-card input:focus { outline: none; border-color: var(--blue); }
 
-/* ---------- 主界面 ---------- */
+/* ---------- Main view ---------- */
 header.topbar {
   position: sticky;
   top: 0;
@@ -91,7 +90,7 @@ header.topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  /* safe-area：刘海/灵动岛机型把顶栏推到状态栏下方，避免文字贴边 */
+  /* safe-area: push the top bar below the status bar on notched devices */
   padding: 14px 16px;
   padding-top: calc(14px + env(safe-area-inset-top, 0px));
   padding-left: calc(16px + env(safe-area-inset-left, 0px));
@@ -108,7 +107,7 @@ main {
   padding: 16px;
   max-width: 720px;
   margin: 0 auto;
-  /* 底部留出 iPhone Home 指示条空间，左右避开曲面/灵动岛安全区 */
+  /* Leave room for the iPhone Home indicator and side safe areas */
   padding-bottom: calc(40px + env(safe-area-inset-bottom, 0px));
   padding-left: calc(16px + env(safe-area-inset-left, 0px));
   padding-right: calc(16px + env(safe-area-inset-right, 0px));
@@ -122,7 +121,7 @@ main {
   padding: 4px;
   margin-bottom: 16px;
   position: sticky;
-  /* 吸附在顶栏下方；顶栏高度随 safe-area 变化，用变量对齐避免遮挡 */
+  /* Stick below the top bar; align with the safe-area-adjusted height */
   top: calc(57px + env(safe-area-inset-top, 0px));
   z-index: 9;
 }
@@ -164,7 +163,7 @@ main {
 .kv .k { color: var(--muted); flex-shrink: 0; }
 .kv .v { text-align: right; word-break: break-all; }
 
-/* 状态徽章 */
+/* Status badges */
 .badge {
   display: inline-block;
   padding: 2px 9px;
@@ -177,7 +176,7 @@ main {
 .badge.pause { background: rgba(217,119,6,.2); color: #fbbf24; }
 .badge.fail { background: rgba(220,38,38,.2); color: #f87171; }
 
-/* 按钮 */
+/* Buttons */
 .btn {
   border: none;
   border-radius: 9px;
@@ -197,7 +196,7 @@ main {
 .btn.sm { padding: 6px 10px; font-size: 13px; }
 .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
 
-/* 开关 */
+/* Switches */
 .switch { position: relative; display: inline-block; width: 46px; height: 26px; flex-shrink: 0; }
 .switch input { opacity: 0; width: 0; height: 0; }
 .slider {
@@ -257,7 +256,7 @@ pre.logs {
 .section-tip { color: var(--muted); font-size: 12.5px; margin: -4px 0 12px; }
 .refresh-bar { display:flex; align-items:center; gap:10px; margin-bottom:12px; font-size:13px; color:var(--muted);}
 
-/* 表单网格 */
+/* Form grid */
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -278,11 +277,11 @@ pre.logs {
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--text);
-  font-size: 15px; /* 防 iOS 聚焦缩放 */
+  font-size: 15px; /* prevent iOS focus zoom */
 }
 .form-grid input:focus { outline: none; border-color: var(--blue); }
 
-/* 账号设置行 */
+/* Account setting rows */
 .acct-block {
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -306,7 +305,7 @@ pre.logs {
 }
 .acct-block .btn-danger:hover { background: rgba(248,113,113,.12); }
 
-/* 添加账号表单 */
+/* Add-account form */
 .add-account { margin-top: 12px; }
 .add-form {
   margin-top: 12px; padding: 14px;
@@ -324,3 +323,26 @@ pre.logs {
   color: var(--text);
 }
 .add-form input:focus { outline: none; border-color: var(--blue); }
+
+/* Consent wizard */
+.consent-panel {
+  margin-top: 12px; padding: 14px;
+  border: 1px dashed var(--border); border-radius: 10px;
+  background: var(--card-2);
+}
+.consent-steps ol {
+  margin: 0 0 12px; padding-left: 20px;
+  display: flex; flex-direction: column; gap: 6px;
+  font-size: 13px; color: var(--text); line-height: 1.5;
+}
+.consent-steps ol strong { color: var(--blue); word-break: break-all; }
+.device-code {
+  font-size: 28px; font-weight: 700; letter-spacing: 3px;
+  text-align: center; padding: 14px; margin: 8px 0;
+  background: var(--bg); border: 1px solid var(--blue);
+  border-radius: 10px; color: #93c5fd;
+  user-select: all;
+}
+#consent-status { text-align: center; margin: 6px 0 0; }
+#consent-status.done { color: #4ade80; font-weight: 600; }
+#consent-status.error { color: #f87171; }
